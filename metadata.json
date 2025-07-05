@@ -1,0 +1,5 @@
+{
+  "name": "GitHub Repo-Jutsu",
+  "description": "An application that analyzes a public GitHub repository and assigns it a fitting anime character badge from Naruto or Demon Slayer using the Gemini API.",
+  "requestFramePermissions": []
+}
