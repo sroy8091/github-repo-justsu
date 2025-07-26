@@ -12,7 +12,6 @@ const getGeminiKey = (): string => {
 
 // Configuration constants
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 const generateUserPrompt = (profile: UserProfile): string => {
   // Optimize: Only take top 3 repos and minimal data to reduce tokens
