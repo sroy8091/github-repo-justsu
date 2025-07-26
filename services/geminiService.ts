@@ -1,12 +1,27 @@
-
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { UserProfile, AnimeBadge } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
+// Lazy environment variable getters to avoid module-level crashes
+const getOpenRouterKey = (): string => {
+    console.log("OPENROUTER_API_KEY", process.env);
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key) {
+        throw new Error("OPENROUTER_API_KEY environment variable not set");
+    }
+    return key;
+};
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getImageRouterKey = (): string => {
+    const key = process.env.IMAGEROUTER_API_KEY;
+    if (!key) {
+        throw new Error("IMAGEROUTER_API_KEY environment variable not set");
+    }
+    return key;
+};
+
+// Configuration constants
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/auto';
+const IMAGEROUTER_MODEL = process.env.IMAGEROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 const generateUserPrompt = (profile: UserProfile): string => {
   // Summarize repos to keep the prompt focused and efficient
@@ -55,21 +70,61 @@ const generateUserPrompt = (profile: UserProfile): string => {
 };
 
 export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadge> => {
+  // Input validation
+  if (!profileData?.user?.login || !Array.isArray(profileData.repos)) {
+    throw new Error("Invalid profile data provided");
+  }
+
   try {
     const prompt = generateUserPrompt(profileData);
 
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-04-17",
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            temperature: 0.8,
-        },
-    });
+    // Add timeout for request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-    let jsonStr = response.text.trim();
+    const requestBody = {
+      model: OPENROUTER_MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.8,
+      response_format: { type: 'json_object' }
+    };
+
+    console.log('OpenRouter request:', { model: OPENROUTER_MODEL, bodyLength: JSON.stringify(requestBody).length });
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${getOpenRouterKey()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/sumitroy/github-repo-jutsu',
+        'X-Title': 'GitHub Repo Jutsu'
+      },
+      body: JSON.stringify(requestBody)
+    });
     
-    const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenRouter API error details:', errorText);
+      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error("Invalid response structure from OpenRouter API");
+    }
+
+    let jsonStr = data.choices[0].message.content.trim();
+    
+    const fenceRegex = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/;
     const match = jsonStr.match(fenceRegex);
     if (match && match[1]) {
         jsonStr = match[1].trim();
@@ -84,34 +139,83 @@ export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadg
     return parsedData;
 
   } catch (error: any) {
-      console.error("Error generating anime badge:", error);
+      console.error("Error generating anime badge:", error.name || 'Unknown error');
+      
+      if (error.name === 'AbortError') {
+          throw new Error("Request timed out. Please try again.");
+      }
       if (error.message.includes("JSON.parse")) {
           throw new Error("The AI returned an invalid response. Please try again.");
       }
-      throw new Error(`Failed to get anime badge from Gemini: ${error.message}`);
+      if (error.message.includes("environment variable")) {
+          throw error; // Re-throw configuration errors as-is
+      }
+      
+      // Sanitize error message to avoid exposing sensitive information
+      const sanitizedMessage = error.message?.replace(/Bearer [^\s]+/g, 'Bearer [REDACTED]') || 'Unknown error';
+      throw new Error(`Failed to get anime badge from OpenRouter: ${sanitizedMessage}`);
   }
 };
 
 export const generateAvatar = async (badge: AnimeBadge): Promise<string> => {
+    // Input validation
+    if (!badge?.characterName || !badge?.anime || !badge?.badgeColor) {
+        throw new Error("Invalid badge data provided");
+    }
+
     try {
         const prompt = `Create a visually stunning, anime-style avatar for a GitHub profile picture. The character is ${badge.characterName} from ${badge.anime}. The avatar should be a circular headshot, vibrant, and capture their essence. The background should be simple and abstract, using thematic colors like ${badge.badgeColor}. The style should be modern anime, clean, and professional.`;
 
-        const response = await ai.models.generateImages({
-            model: 'imagen-3.0-generate-002',
-            prompt: prompt,
-            config: { numberOfImages: 1, outputMimeType: 'image/jpeg' },
+        // Add timeout for request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+        const response = await fetch('https://api.imagerouter.ai/v1/generate', {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'Authorization': `Bearer ${getImageRouterKey()}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'GitHub-Repo-Jutsu/1.0'
+            },
+            body: JSON.stringify({
+                prompt: prompt,
+                model: IMAGEROUTER_MODEL,
+                width: 512,
+                height: 512,
+                steps: 25,
+                guidance: 3.5,
+                output_format: 'jpeg',
+                output_quality: 95
+            })
         });
         
-        const base64ImageBytes = response.generatedImages[0].image.imageBytes;
-        if (!base64ImageBytes) {
-            throw new Error("Imagen model did not return an image.");
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`ImageRouter API error: ${response.status} ${response.statusText}`);
         }
 
-        return `data:image/jpeg;base64,${base64ImageBytes}`;
+        const data = await response.json();
+        
+        if (!data.image || !data.image.base64) {
+            throw new Error("ImageRouter model did not return an image.");
+        }
+
+        return `data:image/jpeg;base64,${data.image.base64}`;
 
     } catch (error: any) {
-        console.error("Error generating avatar image:", error);
-        // Provide a more specific error message for image generation failure
-        throw new Error(`Failed to generate the character avatar. The AI may be busy or the request could not be processed. Please try again.`);
+        console.error("Error generating avatar image:", error.name || 'Unknown error');
+        
+        if (error.name === 'AbortError') {
+            throw new Error("Image generation request timed out. Please try again.");
+        }
+        if (error.message.includes("environment variable")) {
+            throw error; // Re-throw configuration errors as-is
+        }
+        
+        // Sanitize error message to avoid exposing sensitive information
+        const sanitizedMessage = error.message?.replace(/Bearer [^\s]+/g, 'Bearer [REDACTED]') || 'Unknown error';
+        throw new Error(`Failed to generate the character avatar: ${sanitizedMessage}. Please try again.`);
     }
 };
