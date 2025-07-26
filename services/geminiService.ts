@@ -14,35 +14,49 @@ const getGeminiKey = (): string => {
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
 const generateUserPrompt = (profile: UserProfile): string => {
-  // Optimize: Only take top 3 repos and minimal data to reduce tokens
-  const topRepos = profile.repos.slice(0, 3).map(repo => ({
+  // Enhanced data extraction with more context
+  const topRepos = profile.repos.map(repo => ({
     name: repo.name,
-    lang: repo.language,
-    stars: repo.stargazers_count
+    description: repo.description?.slice(0, 80) || '',
+    language: repo.language,
+    stars: repo.stargazers_count,
+    forks: repo.forks_count,
+    topics: repo.topics?.slice(0, 2) || []
   }));
 
-  const user = {
+  const userSummary = {
     name: profile.user.name || profile.user.login,
-    bio: profile.user.bio?.slice(0, 100) || '',
-    repos: topRepos
+    login: profile.user.login,
+    bio: profile.user.bio?.slice(0, 120) || '',
+    repos: topRepos,
+    totalStars: topRepos.reduce((sum, repo) => sum + repo.stars, 0),
+    languages: [...new Set(topRepos.map(r => r.language).filter(Boolean))]
   };
 
-  return `Analyze this GitHub user and assign them a Naruto or Demon Slayer character:
+  return `You are an expert GitHub profile analyst with a deep love for anime, specifically Naruto and Demon Slayer. Your task is to analyze the provided GitHub user's profile and their top repositories to assign them a character from either Naruto or Demon Slayer that best represents their coding style, impact, and overall persona.
 
-User: ${JSON.stringify(user)}
+    Analyze these aspects of the user's profile:
+    - **Overall Theme:** Do their repos have a common theme (e.g., building foundational tools, creating beautiful UIs, data science, system-level programming)?
+    - **Primary Languages:** What do their most-used languages say about them (e.g., Rust for safety, Python for versatility, C for performance)?
+    - **Impact (Stars/Forks):** Is this user highly influential like a Kage or a Hashira, creating projects that many others rely on? Or are they a specialist with niche but powerful skills?
+    - **Bio/Persona:** Does their bio give any clues to their personality?
 
-Consider:
-- Coding style from languages/repos
-- Impact from stars
-- Bio personality
+    Based on your holistic analysis, choose a single character. Be creative and insightful.
 
-Return JSON:
-{
-  "characterName": "string",
-  "anime": "Naruto" | "Demon Slayer",
-  "reason": "string (2 sentences max)",
-  "badgeColor": "string (hex color)"
-}`;
+    **User Profile Data:**
+    \`\`\`json
+    ${JSON.stringify(userSummary, null, 2)}
+    \`\`\`
+
+    **Your output MUST be a single, valid JSON object with NO markdown formatting, matching this exact structure:**
+    \`\`\`json
+    {
+      "characterName": "string",
+      "anime": "Naruto" | "Demon Slayer",
+      "reason": "string (A creative, short explanation for your choice, max 2-3 sentences, explaining the connection to their code/profile)",
+      "badgeColor": "string (A hex color code that represents the character, e.g., '#FF7F00' for Naruto, '#107C80' for Tanjiro)"
+    }
+    \`\`\``;
 };
 
 export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadge> => {
