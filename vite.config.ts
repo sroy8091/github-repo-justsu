@@ -7,10 +7,7 @@ export default defineConfig(({ mode }) => {
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY),
-        'process.env.IMAGEROUTER_API_KEY': JSON.stringify(env.IMAGEROUTER_API_KEY),
-        'process.env.OPENROUTER_MODEL': JSON.stringify(env.OPENROUTER_MODEL),
-        'process.env.IMAGEROUTER_MODEL': JSON.stringify(env.IMAGEROUTER_MODEL)
+        'process.env.GEMINI_MODEL': JSON.stringify(env.GEMINI_MODEL)
       },
       resolve: {
         alias: {

@@ -1,72 +1,49 @@
 import { UserProfile, AnimeBadge } from '../types';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Lazy environment variable getters to avoid module-level crashes
-const getOpenRouterKey = (): string => {
-    console.log("OPENROUTER_API_KEY", process.env);
-    const key = process.env.OPENROUTER_API_KEY;
+const getGeminiKey = (): string => {
+    const key = process.env.GEMINI_API_KEY;
     if (!key) {
-        throw new Error("OPENROUTER_API_KEY environment variable not set");
-    }
-    return key;
-};
-
-const getImageRouterKey = (): string => {
-    const key = process.env.IMAGEROUTER_API_KEY;
-    if (!key) {
-        throw new Error("IMAGEROUTER_API_KEY environment variable not set");
+        throw new Error("GEMINI_API_KEY environment variable not set");
     }
     return key;
 };
 
 // Configuration constants
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/auto';
-const IMAGEROUTER_MODEL = process.env.IMAGEROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 const generateUserPrompt = (profile: UserProfile): string => {
-  // Summarize repos to keep the prompt focused and efficient
-  const repoSummary = profile.repos.map(repo => ({
+  // Optimize: Only take top 3 repos and minimal data to reduce tokens
+  const topRepos = profile.repos.slice(0, 3).map(repo => ({
     name: repo.name,
-    description: repo.description,
-    language: repo.language,
-    stars: repo.stargazers_count,
-    forks: repo.forks_count,
-    topics: repo.topics?.slice(0, 3) || []
+    lang: repo.language,
+    stars: repo.stargazers_count
   }));
 
-  const userSummary = {
-      name: profile.user.name,
-      login: profile.user.login,
-      bio: profile.user.bio,
-      top_repos: repoSummary
-  }
-  
-  return `
-    You are an expert GitHub profile analyst with a deep love for anime, specifically Naruto and Demon Slayer. Your task is to analyze the provided GitHub user's profile and their top repositories to assign them a character from either Naruto or Demon Slayer that best represents their coding style, impact, and overall persona.
+  const user = {
+    name: profile.user.name || profile.user.login,
+    bio: profile.user.bio?.slice(0, 100) || '',
+    repos: topRepos
+  };
 
-    Analyze these aspects of the user's profile:
-    - **Overall Theme:** Do their repos have a common theme (e.g., building foundational tools, creating beautiful UIs, data science, system-level programming)?
-    - **Primary Languages:** What do their most-used languages say about them (e.g., Rust for safety, Python for versatility, C for performance)?
-    - **Impact (Stars/Forks):** Is this user highly influential like a Kage or a Hashira, creating projects that many others rely on? Or are they a specialist with niche but powerful skills?
-    - **Bio/Persona:** Does their bio give any clues to their personality?
+  return `Analyze this GitHub user and assign them a Naruto or Demon Slayer character:
 
-    Based on your holistic analysis, choose a single character. Be creative and insightful.
+User: ${JSON.stringify(user)}
 
-    **User Profile Data:**
-    \`\`\`json
-    ${JSON.stringify(userSummary, null, 2)}
-    \`\`\`
+Consider:
+- Coding style from languages/repos
+- Impact from stars
+- Bio personality
 
-    **Your output MUST be a single, valid JSON object with NO markdown formatting, matching this exact structure:**
-    \`\`\`json
-    {
-      "characterName": "string",
-      "anime": "Naruto" | "Demon Slayer",
-      "reason": "string (A creative, short explanation for your choice, max 2-3 sentences, explaining the connection to their code/profile)",
-      "badgeColor": "string (A hex color code that represents the character, e.g., '#FF7F00' for Naruto, '#107C80' for Tanjiro)"
-    }
-    \`\`\`
-  `;
+Return JSON:
+{
+  "characterName": "string",
+  "anime": "Naruto" | "Demon Slayer",
+  "reason": "string (2 sentences max)",
+  "badgeColor": "string (hex color)"
+}`;
 };
 
 export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadge> => {
@@ -78,57 +55,22 @@ export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadg
   try {
     const prompt = generateUserPrompt(profileData);
 
-    // Add timeout for request
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-
-    const requestBody = {
-      model: OPENROUTER_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.8,
-      response_format: { type: 'json_object' }
-    };
-
-    console.log('OpenRouter request:', { model: OPENROUTER_MODEL, bodyLength: JSON.stringify(requestBody).length });
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Authorization': `Bearer ${getOpenRouterKey()}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/sumitroy/github-repo-jutsu',
-        'X-Title': 'GitHub Repo Jutsu'
-      },
-      body: JSON.stringify(requestBody)
+    // Initialize Gemini API
+    const genAI = new GoogleGenerativeAI(getGeminiKey());
+    const model = genAI.getGenerativeModel({ 
+      model: GEMINI_MODEL,
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 300,
+        responseMimeType: "application/json"
+      }
     });
-    
-    clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenRouter API error details:', errorText);
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
+    console.log('Gemini request:', { model: GEMINI_MODEL, promptLength: prompt.length });
 
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error("Invalid response structure from OpenRouter API");
-    }
-
-    let jsonStr = data.choices[0].message.content.trim();
-    
-    const fenceRegex = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/;
-    const match = jsonStr.match(fenceRegex);
-    if (match && match[1]) {
-        jsonStr = match[1].trim();
-    }
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonStr = response.text().trim();
 
     const parsedData: AnimeBadge = JSON.parse(jsonStr);
     
@@ -141,9 +83,6 @@ export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadg
   } catch (error: any) {
       console.error("Error generating anime badge:", error.name || 'Unknown error');
       
-      if (error.name === 'AbortError') {
-          throw new Error("Request timed out. Please try again.");
-      }
       if (error.message.includes("JSON.parse")) {
           throw new Error("The AI returned an invalid response. Please try again.");
       }
@@ -153,69 +92,78 @@ export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadg
       
       // Sanitize error message to avoid exposing sensitive information
       const sanitizedMessage = error.message?.replace(/Bearer [^\s]+/g, 'Bearer [REDACTED]') || 'Unknown error';
-      throw new Error(`Failed to get anime badge from OpenRouter: ${sanitizedMessage}`);
+      throw new Error(`Failed to get anime badge from Gemini: ${sanitizedMessage}`);
   }
+};
+
+// Character image mapping for popular characters
+const characterImages: Record<string, string> = {
+  'Naruto': 'https://cdn.myanimelist.net/images/characters/2/284121.jpg',
+  'Sasuke': 'https://cdn.myanimelist.net/images/characters/9/131317.jpg',
+  'Kakashi': 'https://cdn.myanimelist.net/images/characters/7/284129.jpg',
+  'Sakura': 'https://cdn.myanimelist.net/images/characters/9/69275.jpg',
+  'Itachi': 'https://cdn.myanimelist.net/images/characters/9/284167.jpg',
+  'Gaara': 'https://cdn.myanimelist.net/images/characters/8/284139.jpg',
+  'Rock Lee': 'https://cdn.myanimelist.net/images/characters/11/253723.jpg',
+  'Neji': 'https://cdn.myanimelist.net/images/characters/2/284133.jpg',
+  'Shikamaru': 'https://cdn.myanimelist.net/images/characters/3/284135.jpg',
+  'Hinata': 'https://cdn.myanimelist.net/images/characters/5/284137.jpg',
+  'Tanjiro': 'https://cdn.myanimelist.net/images/characters/15/271763.jpg',
+  'Nezuko': 'https://cdn.myanimelist.net/images/characters/3/271765.jpg',
+  'Zenitsu': 'https://cdn.myanimelist.net/images/characters/7/271767.jpg',
+  'Inosuke': 'https://cdn.myanimelist.net/images/characters/9/271769.jpg',
+  'Giyu': 'https://cdn.myanimelist.net/images/characters/11/271771.jpg',
+  'Rengoku': 'https://cdn.myanimelist.net/images/characters/13/271773.jpg',
+  'Shinobu': 'https://cdn.myanimelist.net/images/characters/5/271775.jpg',
+  'Mitsuri': 'https://cdn.myanimelist.net/images/characters/7/271777.jpg',
+  'Obanai': 'https://cdn.myanimelist.net/images/characters/9/271779.jpg',
+  'Tengen': 'https://cdn.myanimelist.net/images/characters/11/271781.jpg'
 };
 
 export const generateAvatar = async (badge: AnimeBadge): Promise<string> => {
     // Input validation
-    if (!badge?.characterName || !badge?.anime || !badge?.badgeColor) {
+    if (!badge?.characterName || !badge?.anime) {
         throw new Error("Invalid badge data provided");
     }
 
     try {
-        const prompt = `Create a visually stunning, anime-style avatar for a GitHub profile picture. The character is ${badge.characterName} from ${badge.anime}. The avatar should be a circular headshot, vibrant, and capture their essence. The background should be simple and abstract, using thematic colors like ${badge.badgeColor}. The style should be modern anime, clean, and professional.`;
+        // First try to use pre-mapped character image
+        const characterImage = characterImages[badge.characterName];
+        if (characterImage) {
+            return characterImage;
+        }
 
-        // Add timeout for request
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-
-        const response = await fetch('https://api.imagerouter.ai/v1/generate', {
-            method: 'POST',
-            signal: controller.signal,
+        // Fallback: Search Jikan API for character
+        const searchQuery = encodeURIComponent(`${badge.characterName} ${badge.anime}`);
+        const response = await fetch(`https://api.jikan.moe/v4/characters?q=${searchQuery}&limit=1`, {
+            method: 'GET',
             headers: {
-                'Authorization': `Bearer ${getImageRouterKey()}`,
-                'Content-Type': 'application/json',
                 'User-Agent': 'GitHub-Repo-Jutsu/1.0'
-            },
-            body: JSON.stringify({
-                prompt: prompt,
-                model: IMAGEROUTER_MODEL,
-                width: 512,
-                height: 512,
-                steps: 25,
-                guidance: 3.5,
-                output_format: 'jpeg',
-                output_quality: 95
-            })
+            }
         });
-        
-        clearTimeout(timeoutId);
 
         if (!response.ok) {
-            throw new Error(`ImageRouter API error: ${response.status} ${response.statusText}`);
+            throw new Error(`Jikan API error: ${response.status}`);
         }
 
         const data = await response.json();
         
-        if (!data.image || !data.image.base64) {
-            throw new Error("ImageRouter model did not return an image.");
+        if (data.data && data.data.length > 0 && data.data[0].images?.jpg?.image_url) {
+            return data.data[0].images.jpg.image_url;
         }
 
-        return `data:image/jpeg;base64,${data.image.base64}`;
+        // Ultimate fallback: generic anime avatar based on anime
+        const fallbackImages = {
+            'Naruto': 'https://cdn.myanimelist.net/images/characters/2/284121.jpg',
+            'Demon Slayer': 'https://cdn.myanimelist.net/images/characters/15/271763.jpg'
+        };
+        
+        return fallbackImages[badge.anime as keyof typeof fallbackImages] || fallbackImages['Naruto'];
 
     } catch (error: any) {
-        console.error("Error generating avatar image:", error.name || 'Unknown error');
+        console.error("Error getting character avatar:", error.message);
         
-        if (error.name === 'AbortError') {
-            throw new Error("Image generation request timed out. Please try again.");
-        }
-        if (error.message.includes("environment variable")) {
-            throw error; // Re-throw configuration errors as-is
-        }
-        
-        // Sanitize error message to avoid exposing sensitive information
-        const sanitizedMessage = error.message?.replace(/Bearer [^\s]+/g, 'Bearer [REDACTED]') || 'Unknown error';
-        throw new Error(`Failed to generate the character avatar: ${sanitizedMessage}. Please try again.`);
+        // Return a default anime avatar if all else fails
+        return 'https://cdn.myanimelist.net/images/characters/2/284121.jpg';
     }
 };
