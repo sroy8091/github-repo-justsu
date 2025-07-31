@@ -115,22 +115,22 @@ const characterImages: Record<string, string> = {
   'Sasuke': 'https://cdn.myanimelist.net/images/characters/9/131317.jpg',
   'Kakashi': 'https://cdn.myanimelist.net/images/characters/7/284129.jpg',
   'Sakura': 'https://cdn.myanimelist.net/images/characters/9/69275.jpg',
-  'Itachi': 'https://cdn.myanimelist.net/images/characters/9/284167.jpg',
-  'Gaara': 'https://cdn.myanimelist.net/images/characters/8/284139.jpg',
+  'Itachi': 'https://cdn.myanimelist.net/images/characters/9/284122.jpg',
+  'Gaara': 'https://cdn.myanimelist.net/images/characters/10/293375.jpg',
   'Rock Lee': 'https://cdn.myanimelist.net/images/characters/11/253723.jpg',
-  'Neji': 'https://cdn.myanimelist.net/images/characters/2/284133.jpg',
-  'Shikamaru': 'https://cdn.myanimelist.net/images/characters/3/284135.jpg',
-  'Hinata': 'https://cdn.myanimelist.net/images/characters/5/284137.jpg',
-  'Tanjiro': 'https://cdn.myanimelist.net/images/characters/15/271763.jpg',
-  'Nezuko': 'https://cdn.myanimelist.net/images/characters/3/271765.jpg',
-  'Zenitsu': 'https://cdn.myanimelist.net/images/characters/7/271767.jpg',
-  'Inosuke': 'https://cdn.myanimelist.net/images/characters/9/271769.jpg',
-  'Giyu': 'https://cdn.myanimelist.net/images/characters/11/271771.jpg',
+  'Neji': 'https://cdn.myanimelist.net/images/characters/2/105538.jpg',
+  'Shikamaru': 'https://cdn.myanimelist.net/images/characters/3/131315.jpg',
+  'Hinata': 'https://cdn.myanimelist.net/images/characters/6/278736.jpg',
+  'Tanjiro': 'https://cdn.myanimelist.net/images/characters/6/386735.jpg',
+  'Nezuko': 'https://cdn.myanimelist.net/images/characters/2/378254.jpg',
+  'Zenitsu': 'https://cdn.myanimelist.net/images/characters/10/459689.jpg',
+  'Inosuke': 'https://cdn.myanimelist.net/images/characters/3/329560.jpg',
+  'Giyu': 'https://cdn.myanimelist.net/images/characters/3/423445.jpg',
   'Rengoku': 'https://cdn.myanimelist.net/images/characters/13/271773.jpg',
-  'Shinobu': 'https://cdn.myanimelist.net/images/characters/5/271775.jpg',
-  'Mitsuri': 'https://cdn.myanimelist.net/images/characters/7/271777.jpg',
-  'Obanai': 'https://cdn.myanimelist.net/images/characters/9/271779.jpg',
-  'Tengen': 'https://cdn.myanimelist.net/images/characters/11/271781.jpg'
+  'Shinobu': 'https://cdn.myanimelist.net/images/characters/9/71592.jpg',
+  'Mitsuri': 'https://cdn.myanimelist.net/images/characters/11/514229.jpg',
+  'Obanai': 'https://cdn.myanimelist.net/images/characters/15/466014.jpg',
+  'Tengen': 'https://cdn.myanimelist.net/images/characters/16/387706.jpg'
 };
 
 // Helper function to get the best available image URL for a character
@@ -144,7 +144,7 @@ const getCharacterImageUrl = (characterName: string, anime: string): string => {
     // Fallback: generic anime avatar based on anime
     const fallbackImages = {
         'Naruto': 'https://cdn.myanimelist.net/images/characters/2/284121.jpg',
-        'Demon Slayer': 'https://cdn.myanimelist.net/images/characters/15/271763.jpg'
+        'Demon Slayer': 'https://cdn.myanimelist.net/images/characters/6/386735.jpg'
     };
     
     return fallbackImages[anime as keyof typeof fallbackImages] || fallbackImages['Naruto'];
@@ -185,7 +185,7 @@ export const generateAvatar = async (badge: AnimeBadge): Promise<string> => {
         // Ultimate fallback: generic anime avatar based on anime
         const fallbackImages = {
             'Naruto': 'https://cdn.myanimelist.net/images/characters/2/284121.jpg',
-            'Demon Slayer': 'https://cdn.myanimelist.net/images/characters/15/271763.jpg'
+            'Demon Slayer': 'https://cdn.myanimelist.net/images/characters/6/386735.jpg'
         };
         
         return fallbackImages[badge.anime as keyof typeof fallbackImages] || fallbackImages['Naruto'];
