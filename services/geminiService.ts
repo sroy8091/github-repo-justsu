@@ -109,7 +109,7 @@ export const getAnimeBadge = async (profileData: UserProfile): Promise<AnimeBadg
   }
 };
 
-// Character image mapping for popular characters
+// Character image mapping for popular characters with square aspect ratio
 const characterImages: Record<string, string> = {
   'Naruto': 'https://cdn.myanimelist.net/images/characters/2/284121.jpg',
   'Sasuke': 'https://cdn.myanimelist.net/images/characters/9/131317.jpg',
@@ -131,6 +131,23 @@ const characterImages: Record<string, string> = {
   'Mitsuri': 'https://cdn.myanimelist.net/images/characters/7/271777.jpg',
   'Obanai': 'https://cdn.myanimelist.net/images/characters/9/271779.jpg',
   'Tengen': 'https://cdn.myanimelist.net/images/characters/11/271781.jpg'
+};
+
+// Helper function to get the best available image URL for a character
+const getCharacterImageUrl = (characterName: string, anime: string): string => {
+    // First try to use pre-mapped character image
+    const characterImage = characterImages[characterName];
+    if (characterImage) {
+        return characterImage;
+    }
+
+    // Fallback: generic anime avatar based on anime
+    const fallbackImages = {
+        'Naruto': 'https://cdn.myanimelist.net/images/characters/2/284121.jpg',
+        'Demon Slayer': 'https://cdn.myanimelist.net/images/characters/15/271763.jpg'
+    };
+    
+    return fallbackImages[anime as keyof typeof fallbackImages] || fallbackImages['Naruto'];
 };
 
 export const generateAvatar = async (badge: AnimeBadge): Promise<string> => {

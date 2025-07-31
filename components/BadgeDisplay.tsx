@@ -19,7 +19,7 @@ export const BadgeDisplay: React.FC<BadgeDisplayProps> = ({ badge, avatarUrl, is
         borderColor: badgeColor 
       }}
     >
-        <div className="relative aspect-video bg-gray-800 flex items-center justify-center">
+        <div className="relative aspect-square bg-gray-800 flex items-center justify-center">
             {isLoadingAvatar && (
                 <div className="flex flex-col items-center gap-2 text-slate-300">
                     <LoadingSpinnerIcon className="w-10 h-10" style={{ color: badgeColor }}/>
@@ -30,7 +30,7 @@ export const BadgeDisplay: React.FC<BadgeDisplayProps> = ({ badge, avatarUrl, is
                 <img 
                     src={avatarUrl}
                     alt={`AI-generated avatar of ${characterName}`} 
-                    className="w-full h-full object-cover animate-fade-in"
+                    className="w-3/4 h-3/4 object-contain animate-fade-in mx-auto my-auto"
                 />
             )}
             <div 
